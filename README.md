@@ -72,21 +72,22 @@ erDiagram
 - `GET /api/v1/system/quotas`
 - `POST /api/v1/admin/sync`
 
-The simulator uses a Dixon–Coles corrected 0–8 score matrix and a repeatable 10,000-sample Monte Carlo cross-check. Its probabilities are model estimates, not guarantees. Inputs degrade explicitly when xG or confirmed lineups are unavailable. With a valid football-data token, the initial sync begins five seconds after startup and repeats every six hours. `POST /api/v1/admin/sync` requires `X-Admin-Token` when `ADMIN_API_TOKEN` is configured.
+The simulator uses a Dixon–Coles corrected 0–8 score matrix and a repeatable 10,000-sample Monte Carlo cross-check. Its probabilities are model estimates, not guarantees. Inputs degrade explicitly when xG or confirmed lineups are unavailable. In local Docker mode, the initial sync begins five seconds after startup and repeats every six hours. On Vercel, the protected `GET /api/v1/admin/sync` Cron route runs once each day; a manual `POST /api/v1/admin/sync` requires `X-Admin-Token` when `ADMIN_API_TOKEN` is configured.
 
 ## Free public deployment
 
-The public `main` branch can publish the frontend through GitHub Pages using `.github/workflows/pages.yml`. GitHub Pages serves only static files, so the API needs a separate web host. `render.yaml` prepares a free Render web service; free web instances sleep after 15 minutes idle, and free Render Postgres expires after 30 days, so use an external Postgres provider for a durable database. Neon currently lists a $0 plan with 1 GB/project and no time limit; its compute sleeps when inactive. Free plans and limits can change.
+Vercel can host both the Vite frontend and FastAPI backend on its free Hobby plan for personal, non-commercial projects. The repository is a monorepo, so create two Vercel projects connected to the same GitHub repository:
 
-1. Create a Neon Postgres project and copy its connection string. Create a Render account and deploy this repository using the included Blueprint. Set `DATABASE_URL` to the Neon connection string, `FOOTBALL_DATA_TOKEN` to your provider token, and a private `ADMIN_API_TOKEN` in the Render service environment.
-2. In GitHub repository settings, enable Pages with **GitHub Actions**. Add repository variable `VITE_API_URL` with the deployed API base, for example `https://spikemetrics-api.onrender.com/api/v1`.
-3. Set Render `CORS_ORIGINS` to `https://johnmnyika.github.io` (or your actual Pages host) and push to `main` to publish the frontend. The Pages workflow stops with a clear error until `VITE_API_URL` is configured.
+1. Create a Neon Postgres project and copy its connection string. Before deploying, run the database migration from `backend` with the connection string: `DATABASE_URL='your-Neon-connection-string' alembic upgrade head`.
+2. Create a Vercel project named `spikemetrics-api`, set its Root Directory to `backend`, and configure `DATABASE_URL`, `FOOTBALL_DATA_TOKEN`, `CRON_SECRET`, and `CORS_ORIGINS`. The Python runtime detects FastAPI from `app/main.py`; `backend/vercel.json` sets the function duration and once-daily data sync. Set `CORS_ORIGINS` to the frontend's exact Vercel origin, for example `https://spikemetrics.vercel.app`.
+3. Create a second Vercel project named `spikemetrics`, connected to the same repository, with Root Directory `frontend`. Set `VITE_API_URL` to the API deployment URL plus `/api/v1`, for example `https://spikemetrics-api.vercel.app/api/v1`.
+4. Add `FOOTBALL_DATA_TOKEN` to the backend project's Vercel environment variables. The optional `API_FOOTBALL_KEY` is not used by current ingestion. Do not put secrets in GitHub or frontend variables.
 
-GitHub Pages is available for public repositories on GitHub Free. Render's free web service may take about a minute to wake after idle time; Neon free databases can also suspend compute when inactive. These options are useful for a public demo, not an uptime guarantee.
+Vercel Cron invokes the protected `GET /api/v1/admin/sync` route daily at 04:00 UTC (Hobby timing may vary). The sync uses ten football-data.org competition requests spaced to respect the free 10 requests/minute limit. Vercel Functions are request-driven, so APScheduler runs only in local Docker mode. Vercel Hobby is free for personal, non-commercial projects; its resource limits and cron behavior can change.
 
 ## Database migrations
 
-Alembic applies the initial PostgreSQL schema automatically in the API container at startup. To operate it manually, from `backend` run `alembic upgrade head`; generate later revisions with `alembic revision --autogenerate -m "description"`.
+Alembic applies the schema automatically in the local Docker API container at startup. Vercel does not run the Docker startup command, so apply migrations to Neon before the first Vercel deployment. From `backend`, run `DATABASE_URL='your-Neon-connection-string' alembic upgrade head`; generate later revisions with `alembic revision --autogenerate -m "description"`.
 
 ## Verification
 

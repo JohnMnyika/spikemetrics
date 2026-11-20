@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     sync_interval_hours: int = 6
     cors_origins: str = "http://localhost:5173"
     admin_api_token: str = ""
+    cron_secret: str = ""
 
 
 settings = Settings()

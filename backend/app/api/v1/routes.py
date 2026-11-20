@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import secrets
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from app.core.config import settings
@@ -134,7 +134,7 @@ async def _sync_now(request: Request):
 
 
 @router.post("/admin/sync")
-async def sync(background_tasks: BackgroundTasks, request: Request):
+async def sync(request: Request):
     supplied = request.headers.get("x-admin-token", "")
     if settings.admin_api_token and not secrets.compare_digest(supplied, settings.admin_api_token):
         raise HTTPException(401, "Invalid admin token")
@@ -142,5 +142,20 @@ async def sync(background_tasks: BackgroundTasks, request: Request):
         raise HTTPException(503, "Configure ADMIN_API_TOKEN before enabling remote sync")
     if not settings.football_data_token:
         return {"status":"demo", "message":"Set FOOTBALL_DATA_TOKEN to enable live fixture sync"}
-    background_tasks.add_task(_sync_now, request)
-    return {"status":"queued","provider":"football-data.org"}
+    await _sync_now(request)
+    return request.app.state.last_sync
+
+
+@router.get("/admin/sync")
+async def scheduled_sync(request: Request):
+    """Vercel Cron calls this once daily with Authorization: Bearer CRON_SECRET."""
+    if not settings.cron_secret:
+        raise HTTPException(503, "Configure CRON_SECRET to enable scheduled sync")
+    authorization = request.headers.get("authorization", "")
+    supplied = authorization.removeprefix("Bearer ")
+    if not secrets.compare_digest(supplied, settings.cron_secret):
+        raise HTTPException(401, "Invalid cron secret")
+    if not settings.football_data_token:
+        return {"status":"demo", "message":"Set FOOTBALL_DATA_TOKEN to enable live fixture sync"}
+    await _sync_now(request)
+    return request.app.state.last_sync
