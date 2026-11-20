@@ -4,14 +4,19 @@ from sqlalchemy.pool import NullPool
 import os
 from app.core.config import settings
 
-database_url = make_url(settings.database_url)
-query = dict(database_url.query)
-if database_url.drivername in ("postgres", "postgresql"):
-    database_url = database_url.set(drivername="postgresql+asyncpg")
-if "sslmode" in query:
-    query["ssl"] = query.pop("sslmode")
-    query.pop("channel_binding", None)
-    database_url = database_url.set(query=query)
+def normalize_database_url(raw_url: str):
+    url = make_url(raw_url)
+    query = dict(url.query)
+    if url.drivername in ("postgres", "postgresql"):
+        url = url.set(drivername="postgresql+asyncpg")
+    if "sslmode" in query:
+        query["ssl"] = query.pop("sslmode")
+        query.pop("channel_binding", None)
+        url = url.set(query=query)
+    return url
+
+
+database_url = normalize_database_url(settings.database_url)
 if os.getenv("VERCEL"):
     engine = create_async_engine(database_url, poolclass=NullPool, pool_pre_ping=True)
 else:

@@ -1,11 +1,14 @@
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+import os
 from app.models.entities import Base
-from app.core.database import database_url
+from app.core.database import database_url, normalize_database_url
 
 config = context.config
-config.set_main_option("sqlalchemy.url", database_url.render_as_string(hide_password=False).replace("%", "%%"))
+# Neon provides a direct URL for migrations and a pooled URL for application traffic.
+migration_url = normalize_database_url(os.environ["DATABASE_URL_UNPOOLED"]) if os.getenv("DATABASE_URL_UNPOOLED") else database_url
+config.set_main_option("sqlalchemy.url", migration_url.render_as_string(hide_password=False).replace("%", "%%"))
 target_metadata = Base.metadata
 
 def run_migrations_offline():
