@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: spikemetrics-api
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: FOOTBALL_DATA_TOKEN
+        sync: false
+      - key: ADMIN_API_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://johnmnyika.github.io
